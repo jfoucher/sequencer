@@ -1,5 +1,6 @@
 from machine import Pin, PWM, Timer
 from rotary_irq_rp2 import RotaryIRQ
+import neopixel
 
 import time
 
@@ -8,6 +9,12 @@ import time
 # Modes : play, record, ?
 
 # Tapping the rotary encoder button cycles between the modes
+
+# One mode only : 
+# if a key is held down, the rotary encoder changes its pitch
+# if no key is held down, the rotary encoder changes the tempo
+# if the rotary encoder is tapped, it pauses / starts playback
+# if the rotary encoder is held down while turned, it sets the last step
 
 # in play mode:
 # the rotary encoder changes the tempo
@@ -24,6 +31,11 @@ PLAY = 1
 
 #set default tempo
 tempo = 60
+#set default sequence
+sequence = [0] * 16
+
+# TODO load saved tempo and sequence
+
 
 # set default mode on boot
 mode = RECORD
@@ -37,41 +49,51 @@ play_step = 0
 first_step = 0
 last_step = 15
 
-sequence = [0] * 16
+
 
 rotary_button = Pin(2, Pin.IN, Pin.PULL_UP)
 
 # multiplexed led pins
 # the rows will go LOW to turn the row on
-led_row_pins = [Pin(0, Pin.OUT), Pin(1, Pin.OUT), Pin(4, Pin.OUT), Pin(3, Pin.OUT)]
-# the COL will go HIGH to turn a specific led ON
-led_col_pins = [Pin(5, Pin.OUT), Pin(6, Pin.OUT), Pin(7, Pin.OUT), Pin(8, Pin.OUT), ]
-
-# set rows high
-for pin in led_row_pins:
-    pin.off()
+lr = [board.GP0, board.GP1, board.GP4, board.GP2]
+led_row_pins = []
+for l in lr:
+    led_pin = digitalio.DigitalInOut(l)
+    led_pin.direction = digitalio.Direction.OUTPUT
+    led_pin.value = False
+    led_row_pins.append(led_pin)
     
-# set cols low
-for pin in led_col_pins:
-    pin.on()
-    
-# led_row_pins[0].on()
+lc = [board.GP5, board.GP6, board.GP7, board.GP8]
+led_col_pins = []
+for l in lc:
+    led_pin = digitalio.DigitalInOut(l)
+    led_pin.direction = digitalio.Direction.OUTPUT
+    led_pin.value = True
+    led_col_pins.append(led_pin)
 
-# led_col_pins[0].off()
 
 # keyboard matrix
 # the rows will go LOW to turn the row on
-kb_row_pins = [Pin(8, Pin.OUT), Pin(9, Pin.OUT), Pin(10, Pin.OUT), Pin(11, Pin.OUT)]
+kr = [board.GP9, board.GP10, board.GP11, board.GP12]
+kb_row_pins = []
+for l in kr:
+    led_pin = digitalio.DigitalInOut(l)
+    led_pin.direction = digitalio.Direction.OUTPUT
+    led_pin.value = True
+    kb_row_pins.append(led_pin)
 # the COLS will go low if this key is connected
-kb_col_pins = [Pin(12, Pin.IN, Pin.PULL_UP), Pin(13, Pin.IN, Pin.PULL_UP), Pin(14, Pin.IN, Pin.PULL_UP), Pin(15, Pin.IN, Pin.PULL_UP)]
+kc = [board.GP13, board.GP14, board.GP15, board.GP18]
+kb_col_pins = []
+
+for l in kc:
+    led_pin = digitalio.DigitalInOut(l)
+    led_pin.direction = digitalio.Direction.INPUT
+    led_pin.pull = digitalio.Pull.UP
+    kb_col_pins.append(led_pin)
 
 kb_rows = len(kb_row_pins)
 
 kb_cols = len(kb_col_pins)
-
-# set rows high
-for pin in kb_row_pins:
-    pin.on()
 
 current_led = 0
 previous_led = 1
@@ -82,24 +104,60 @@ old_pressed_key = 0xFF
 
 rotary_button_pressed = 0
 debounce_time = 0
+debounce_time_rel = 0
 
-def rotary_button_interrupt(pin):
+last_note_play_time = 0
+
+change_mode = False
+
+
+
+def rotary_button_was_pressed():
     global interrupt_flag, debounce_time, rotary_button_pressed
     print(time.ticks_ms()-debounce_time)
-    if (time.ticks_ms()-debounce_time) > 500:
+    if (time.ticks_ms()-debounce_time) > 50:
         print('clicked')
         rotary_button_pressed = 1
         debounce_time=time.ticks_ms()
+        
+def rotary_button_released():
+    global interrupt_flag, debounce_time_rel, rotary_button_pressed, debounce_time, change_mode
+    print(time.ticks_ms()-debounce_time_rel)
+    if (time.ticks_ms()-debounce_time_rel) > 50:
+        rotary_button_pressed = 0
+        debounce_time_rel=time.ticks_ms()
+        print('released', debounce_time_rel, debounce_time)
+        
+    print('released time', debounce_time_rel-debounce_time)
+    if (debounce_time_rel-debounce_time) < 1000:
+        # pressed and released within 1 second, change mode
+        print('changing mode')
+        change_mode = True
 
-rotary_button.irq(trigger=Pin.IRQ_FALLING, handler=rotary_button_interrupt)
+def rotary_button_interrupt(pin):
+    v = pin.value()
+    print('pin value', v)
+    if(v == 1):
+        rotary_button_released()
+    else:
+        rotary_button_was_pressed()
+
+rotary_button.irq(trigger=Pin.IRQ_FALLING|Pin.IRQ_RISING, handler=rotary_button_interrupt)
+
+
+np = neopixel.NeoPixel(Pin(23), 1)
+
+np[0] = (255, 0, 0)
+
+np.write()
 
 def led_display(t):
     # scan the keyboard matrix and turn on the correct LED
     global previous_led
     #print('current_led', current_led)
     # exit if no change
-    # if (previous_led == current_led):
-    #     return
+    if (previous_led == current_led):
+        return
     # turn on the led that should currently be on according to current_led
     row = current_led // 4
     col = current_led % 4
@@ -115,6 +173,8 @@ def led_display(t):
     # current_led+=1
     # if (current_led > last_step):
     #     current_led = first_step
+    
+led_timer = Timer(period=30, mode=Timer.PERIODIC, callback=led_display)
 
 def scan_matrix(t):
     global pressed_key, debounce_time, old_pressed_key
@@ -123,43 +183,34 @@ def scan_matrix(t):
         # set previous pin high
         kb_row_pins[r-1].on()
         # set current pin LOW
-        kb_row_pins[r-1].off()
+        kb_row_pins[r].off()
         
         # read cols to get pressed key
         for c in range(kb_cols):
+            pin = kb_col_pins[c]
             if pin.value() == 0:
                 delta = time.ticks_diff(time.ticks_ms(), debounce_time)
                 # set pressed key with debounce
                 if (delta > 60 and old_pressed_key == r*kb_cols + c):
                     pressed_key = old_pressed_key
                     debounce_time = time.ticks_ms()
+                    #print('pressed key', pressed_key)
                     
                 old_pressed_key = r*kb_cols + c
-
-timer = Timer(period=50, mode=Timer.PERIODIC, callback=led_display)
-
+                
+                
+kb_timer = Timer(period=15, mode=Timer.PERIODIC, callback=scan_matrix)
 
 def play_note(midi_note):
     # plays a midi note from 32 to 96
-    print("play note")
+    print("play note", midi_note)
 
     
-def play_current_note(t):
-    global play_step, current_led, play_step
-    play_step = play_step + 1
-    if (play_step > last_step):
-        play_step = first_step
-    current_led = play_step
-    
-    play_note(sequence[play_step])
-    
-    print('playing', play_step)
-    
 
-tempo_timer = Timer(period=60000//tempo, mode=Timer.PERIODIC, callback=play_current_note)
-tempo_timer.deinit()
+# tempo_timer = Timer(period=60000//tempo, mode=Timer.PERIODIC, callback=play_current_note)
+# tempo_timer.deinit()
 
-#kb_timer = Timer(period=15, mode=Timer.PERIODIC, callback=scan_matrix)
+
 
 rot = RotaryIRQ(
     pin_num_clk=16, 
@@ -179,34 +230,53 @@ def rotary_changed():
         current_led = v
         record_step = v
         print('current_led set', current_led)
-        sequence[current_step] = v
+        sequence[record_step] = v
         
     else:
         tempo = v
         print('tempo set', tempo)
-        tempo_timer.init(period=60000//tempo, mode=Timer.PERIODIC, callback=play_current_note)
+        #tempo_timer.init(period=60000//tempo, mode=Timer.PERIODIC, callback=play_current_note)
 
 rot.add_listener(rotary_changed)
 
 
 while True:
-    if rotary_button_pressed == 1:
-        rotary_button_pressed = 0
+    if change_mode:
+        change_mode = False
         print('current mode', mode)
         if (mode == RECORD):
             mode = PLAY
             play_step = record_step
             rot.set(value=tempo, min_val=0, incr=5,
-                max_val=1000, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-            tempo_timer.init(period=60000//tempo, mode=Timer.PERIODIC, callback=play_current_note)
+                max_val=2000, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+            #tempo_timer.init(period=60000//tempo, mode=Timer.PERIODIC, callback=play_current_note)
+            np[0] = (0, 0, 255)
+            np.write()
         else: 
             mode = RECORD
+            np[0] = (255, 0, 0)
+            np.write()
+            record_step = play_step
             rot.set(value=play_step, min_val=0, incr=1,
                 max_val=15, reverse=False, range_mode=RotaryIRQ.RANGE_WRAP)
-            tempo_timer.deinit()
+            
+            #tempo_timer.deinit()
             
                 
         print('new mode', mode)
+        
+    delta = time.ticks_diff(time.ticks_ms(), last_note_play_time)
+    
+    if (mode == PLAY and delta > 60000//tempo):
+        last_note_play_time = time.ticks_ms()
+        current_led = play_step
+        play_note(sequence[play_step])
+        play_step += 1
+        if (play_step > last_step):
+            play_step = first_step
+        
+        
+        
     # if (pressed_key <= len(sequence)):
     #     # do something with the key depending on the mode we're in
     #     if (rotary_button.value() == 0):
