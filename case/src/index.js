@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { cylinder, difference, sphere, cube, polygon, union, hull, intersection, minkowski, mirror, linear_extrude, text_3d, rounded_cube, knurled_cyl } = require('scad-js');
+const { cylinder, difference, sphere, cube, polygon, union, hull, intersection, multmatrix, minkowski, mirror, linear_extrude, text_3d, rounded_cube, knurled_cyl } = require('scad-js');
 
 
 const size = 20;
@@ -56,32 +56,59 @@ difference(
   
 )
 
+const top_angle = 5
+
+let screw_hole = cylinder(6.1, 2.3).translate([0, 0, 3])
 
 const top = 
+difference(
+difference(
 union(
   //knob.translate([77, -15, 22]),
+  union(
   difference(
+
       minkowski(
         cube([keyPitch*10, 70, 30]),
         sphere(5)
       ),
+      
+
     minkowski(
       cube([keyPitch*10-6, 64, 22]),
       sphere(1)
     ),
-    cube([keyPitch*20, 100, 30]).translate([0, 0, -15]),
+    
+    
+  ),
+  cylinder(30, 5).translate([keyPitch*5, 35, 0]),
+  cylinder(30, 5).translate([keyPitch*5, -35, 0]),
+  cylinder(30, 5).translate([-keyPitch*5, 35, 0]),
+  cylinder(30, 5).translate([-keyPitch*5, -35, 0]),
+  ).multmatrix([[1, 0, 0, 0], [0, 1, Math.sin(top_angle*Math.PI/180), -2], [0, 0, 1, 0]]),
+  keys.translate([0, -22, 0]),
+  keys.translate([0, 12, 0]),
+  
+),
+
     holes.translate([0, -22, 0]),
     holes.translate([0, 12, 0]),
     leds.translate([0, -8, 0]),
     leds.translate([0, 27, 0]),
     // rotary encoder hole
     cylinder(50, 3.6).translate([77, -15, 20]),
-    cylinder(50, 5).scale([1.5, 1, 1]).rotate([90, 0, 0]).translate([77, 15, 0]),
-    cube([25, 16, 20]).translate([77, 30, 0]),
-  ),
-  keys.translate([0, -22, 0]),
-  keys.translate([0, 12, 0]),
-  
+    cube([10, 40, 5]).translate([77, 25, 2]),
+    //cylinder(50, 4).scale([1.5, 1, 1]).rotate([90, 0, 0]).translate([77, 15, 0]),
+    cylinder(50, 4).rotate([90, 0, 0]).translate([40, 15, 4]),
+    cylinder(50, 4).rotate([90, 0, 0]).translate([20, 15, 4]),
+    cube([25, 16, 12]).translate([77, 28, 0]),
+    cube([13.5, 15.5, 20]).translate([77, -15, 6]),
+).rotate([top_angle, 0, 0]),
+cube([keyPitch*20, 100, 30]).translate([0, 0, -15]),
+screw_hole.translate([keyPitch*5, 33, 0]),
+screw_hole.translate([keyPitch*5, -37, 0]),
+screw_hole.translate([-keyPitch*5, 33, 0]),
+screw_hole.translate([-keyPitch*5, -37, 0]),
 )
 
 
