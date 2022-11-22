@@ -111,8 +111,58 @@ screw_hole.translate([-keyPitch*5, 33, 0]),
 screw_hole.translate([-keyPitch*5, -37, 0]),
 )
 
+const hex_size = 8
+const hex_sep = 4
+const grid_x = keyPitch*10-8
+const grid_y = 62
 
-const output = top
+const grid_thickness = 8
+
+const number_x = Math.ceil(grid_x / (hex_size/2 + hex_sep))+1
+const number_y = Math.ceil(grid_y / (hex_size/2 + hex_sep))+1
+
+console.log(number_x)
+
+const cylinders = []
+
+for (i=0; i< number_x; i++) {
+  for (j=0; j< number_y; j++) {
+    cylinders.push(cylinder(grid_thickness, hex_size/2, {$fn:6}).translate([i*(hex_size/2 + hex_sep), j*(hex_size/2 + hex_sep) + (i%2)*hex_size/2, 0]));
+  }
+}
+
+const hex_grid = intersection(union(...cylinders).translate([-grid_x/2, -grid_y/2, 0]), cube([grid_x, grid_y, grid_thickness]));
+
+const bottom = union(
+  difference(
+  minkowski(
+
+        cube([keyPitch*10, 70, 20]),
+        cylinder(5, 5),
+),
+  minkowski(
+
+        cube([keyPitch*10-6, 64, 16]),
+        cylinder(5, 1),
+
+
+),
+cube([keyPitch*14, 100, 30]).translate([0, 0, 10]),
+
+hex_grid.translate([0, 0, -10]),
+
+cylinder(30, 2).translate([keyPitch*5, 35, 0]),
+cylinder(30, 2).translate([keyPitch*5, -35, 0]),
+cylinder(30, 2).translate([-keyPitch*5, 35, 0]),
+cylinder(30, 2).translate([-keyPitch*5, -35, 0]),
+
+),
+
+
+)
+
+
+const output = union(bottom,)
 
 const knurled_cylinder_module = `
 /*
