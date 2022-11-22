@@ -187,12 +187,10 @@ while True:
             play_step = first_step
     elif(playing and tempo > 0 and delta > 30/tempo and delta_off >= 60/tempo):
         last_note_off_time = t
-        print('play_step', play_step)
         
         ps = play_step - 1
         if ps < 0:
             ps = last_step
-        print('ps', ps)
             
         if (active[ps]):
             message = NoteOff(sequence[ps])
@@ -224,6 +222,8 @@ while True:
                     pixels.fill((0, 255, 0))
                 else:
                     pixels.fill((255, 0, 0))
+                    message = NoteOff(sequence[current_led])
+                    midi.send(message)
                 pixels.show()
         
     event = keys.events.get()
