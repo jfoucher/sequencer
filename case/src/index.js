@@ -60,109 +60,147 @@ const top_angle = 5
 
 let screw_hole = cylinder(6.1, 2.3).translate([0, 0, 3])
 
-const top = 
-difference(
-difference(
-union(
-  //knob.translate([77, -15, 22]),
-  union(
-  difference(
-
+const box = difference(
       minkowski(
-        cube([keyPitch*10, 70, 30]),
+        cube([keyPitch*10, 70, 40]),
         sphere(5)
       ),
-      
-
     minkowski(
-      cube([keyPitch*10-6, 64, 22]),
+      cube([keyPitch*10, 70, 40]),
       sphere(1)
     ),
-    
-    
-  ),
-  cylinder(30, 5).translate([keyPitch*5, 35, 0]),
-  cylinder(30, 5).translate([keyPitch*5, -35, 0]),
-  cylinder(30, 5).translate([-keyPitch*5, 35, 0]),
-  cylinder(30, 5).translate([-keyPitch*5, -35, 0]),
-  ).multmatrix([[1, 0, 0, 0], [0, 1, Math.sin(top_angle*Math.PI/180), -2], [0, 0, 1, 0]]),
-  keys.translate([0, -22, 0]),
-  keys.translate([0, 12, 0]),
+  ).multmatrix([[1, 0, 0, 0], [0, 1, Math.sin(top_angle*Math.PI/180), -2], [0, 0, 1, 0]])
+  .rotate([top_angle, 0, 0])
+  .translate([0, 0, -5])
   
-),
-
-    holes.translate([0, -22, 0]),
-    holes.translate([0, 12, 0]),
-    leds.translate([0, -8, 0]),
-    leds.translate([0, 27, 0]),
-    // rotary encoder hole
-    cylinder(50, 3.6).translate([77, -15, 20]),
-    cube([10, 40, 5]).translate([77, 25, 2]),
-    //cylinder(50, 4).scale([1.5, 1, 1]).rotate([90, 0, 0]).translate([77, 15, 0]),
-    cylinder(50, 4).rotate([90, 0, 0]).translate([40, 15, 4]),
-    cylinder(50, 4).rotate([90, 0, 0]).translate([20, 15, 4]),
-    cube([25, 16, 12]).translate([77, 28, 0]),
-    cube([13.5, 15.5, 20]).translate([77, -15, 6]),
-).rotate([top_angle, 0, 0]),
-cube([keyPitch*20, 100, 30]).translate([0, 0, -15]),
-screw_hole.translate([keyPitch*5, 33, 0]),
-screw_hole.translate([keyPitch*5, -37, 0]),
-screw_hole.translate([-keyPitch*5, 33, 0]),
-screw_hole.translate([-keyPitch*5, -37, 0]),
+const screw_post = union(
+  cylinder(10, 5),
+  sphere(5).translate([0, 0, 5])
 )
 
-const hex_size = 8
-const hex_sep = 4
-const grid_x = keyPitch*10-8
-const grid_y = 62
+const audio_out = union(
+  cylinder(12, 3).translate([0, 0, 6]).rotate([0, 90, 0]),
+  cube([8, 12, 10])
+).rotate([0, 0, 90])
+
+const oled_hole = union(
+  cube([30, 12, 3]),
+  cube([40, 12.5, 8]).translate([2, 0.5, -4])
+)
+
+const top = 
+difference(
+  union(
+    union(
+      keys.translate([0, -22, 0]),
+      keys.translate([0, 12, 0]),
+      
+    ).rotate([top_angle, 0, 0]),
+
+    screw_post.translate([keyPitch*5, 33, 0]),
+    screw_post.translate([-keyPitch*5, -37, 0]),
+    screw_post.translate([-keyPitch*5, 33, 0]),
+    screw_post.translate([keyPitch*5, -37, 0]),
+
+    difference(
+  //knob.translate([77, -15, 22]),
+
+      box,
+      union(
+        holes.translate([0, -22, 0]),
+        holes.translate([0, 12, 0]),
+        leds.translate([0, -8, 0]),
+        leds.translate([0, 27, 0]),
+        // rotary encoder hole
+        cylinder(50, 3.6).translate([77, -15, 20]),
+        cube([10, 40, 5]).translate([77, 25, 2]),
+        //cylinder(50, 4).scale([1.5, 1, 1]).rotate([90, 0, 0]).translate([77, 15, 0]),
+        oled_hole.translate([75, 25, 19]),
+        
+        cube([13.5, 15.5, 20]).translate([77, -15, 6]),
+      ).rotate([top_angle, 0, 0])
+    )
+  ),
+cube([25, 16, 12]).translate([77, 29, 3]),
+  cube([keyPitch*20, 100, 60]).translate([0, 0, -30]),
+          //3.5 mm outputs
+        audio_out.translate([40, 32, 5]),
+        audio_out.translate([20, 32, 5]),
+        
+        //Midi in / out
+        cylinder(50, 8).rotate([90, 0, 0]).translate([-17, 15, 5]),
+        cylinder(50, 8).rotate([90, 0, 0]).translate([-55, 15, 5]),
+
+    screw_hole.translate([keyPitch*5, 33, 0]),
+    screw_hole.translate([keyPitch*5, -37, 0]),
+    screw_hole.translate([-keyPitch*5, 33, 0]),
+    screw_hole.translate([-keyPitch*5, -37, 0]),
+
+)
+
+const hex_size = 14
+const hex_sep = 5
+const grid_x = keyPitch*10-6
+const grid_y = 70-6
 
 const grid_thickness = 8
 
 const number_x = Math.ceil(grid_x / (hex_size/2 + hex_sep))+1
 const number_y = Math.ceil(grid_y / (hex_size/2 + hex_sep))+1
 
-console.log(number_x)
-
 const cylinders = []
 
 for (i=0; i< number_x; i++) {
   for (j=0; j< number_y; j++) {
-    cylinders.push(cylinder(grid_thickness, hex_size/2, {$fn:6}).translate([i*(hex_size/2 + hex_sep), j*(hex_size/2 + hex_sep) + (i%2)*hex_size/2, 0]));
+    cylinders.push(cylinder(grid_thickness, hex_size/2, {$fn:6}).translate([i*(hex_size + hex_sep/2 - hex_size*0.266666), j*(hex_size + hex_sep/2 - hex_size/2*0.266666) + (i%2)*(hex_size/2) - hex_size/2, 0]));
   }
 }
 
 const hex_grid = intersection(union(...cylinders).translate([-grid_x/2, -grid_y/2, 0]), cube([grid_x, grid_y, grid_thickness]));
 
-const bottom = union(
+const bottom =
   difference(
-  minkowski(
+    union(
+    intersection(
+      union(
+        box,
+        cube([keyPitch*10+6, 74, 3]).translate([0, -2, -8])
+      ),
+      cube([keyPitch*14, 150, 8]).translate([0, 0, -4]),
+    ),
+    //screw posts
+    ),
 
-        cube([keyPitch*10, 70, 20]),
-        cylinder(5, 5),
-),
-  minkowski(
+    
+    hex_grid.translate([0, -2, -10]),
 
-        cube([keyPitch*10-6, 64, 16]),
-        cylinder(5, 1),
+    //screw holes
+    cylinder(30, 2).translate([keyPitch*5, 33, 0]),
+    cylinder(30, 2).translate([keyPitch*5, -37, 0]),
+    cylinder(30, 2).translate([-keyPitch*5, 33, 0]),
+    cylinder(30, 2).translate([-keyPitch*5, -37, 0]),
+    
 
-
-),
-cube([keyPitch*14, 100, 30]).translate([0, 0, 10]),
-
-hex_grid.translate([0, 0, -10]),
-
-cylinder(30, 2).translate([keyPitch*5, 35, 0]),
-cylinder(30, 2).translate([keyPitch*5, -35, 0]),
-cylinder(30, 2).translate([-keyPitch*5, 35, 0]),
-cylinder(30, 2).translate([-keyPitch*5, -35, 0]),
-
-),
-
-
+    
+  //3.5 mm outputs
+        cylinder(50, 4).rotate([90, 0, 0]).translate([40, 15, 5]),
+        cylinder(50, 4).rotate([90, 0, 0]).translate([20, 15, 5]),
+        
+        //Midi in / out
+        cylinder(50, 8).rotate([90, 0, 0]).translate([-17, 15, 5]),
+        cylinder(50, 8).rotate([90, 0, 0]).translate([-55, 15, 5]),
 )
 
 
-const output = union(bottom,)
+// const output = union(top, bottom)
+
+const output = union(
+  // cylinder(grid_thickness, hex_size/2).translate([0*(hex_size + hex_sep), 0, 0]),
+  // cylinder(grid_thickness, hex_size/2).translate([1*(hex_size + hex_sep), 0, 0]),
+  // cylinder(grid_thickness, hex_size/2).translate([2*(hex_size + hex_sep), 0, 0]),
+  // bottom,
+  top,
+)
 
 const knurled_cylinder_module = `
 /*
