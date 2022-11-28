@@ -31,11 +31,14 @@ const plh = union(
   ),
 )
 
+const text = text_3d("SEEQ", 5, {font:"Anurati", size:9, halign:'center'})
+const text2 = text_3d("by jfoucher", 5, {font:"3270 Condensed", size: 4.05, halign:'center'})
+
 const switchHole = union(plh, plh.mirror([1, 0, 0]).mirror([0, 1, 0]))
 
 keys = union(...[0, 1, 2, 3, 4, 5, 6, 7].map(n => switchHole.translate([n*keyPitch - 4.5*keyPitch, 0, 16])))
 holes = union(...[0, 1, 2, 3, 4, 5, 6, 7].map(n => keyhole.translate([n*keyPitch - 4.5*keyPitch, 0, 16])))
-leds  = union(...[0, 1, 2, 3, 4, 5, 6, 7].map(n => cylinder(30, 2.5).translate([n*keyPitch - 4.5*keyPitch, 0, 16])))
+leds  = union(...[0, 1, 2, 3, 4, 5, 6, 7].map(n => cylinder(30, 2.55).translate([n*keyPitch - 4.5*keyPitch, 0, 16])))
 knob_shaft_radius = 3;
 knob_shaft_flat = 1.5;
 knob_shaft_length = 5;
@@ -85,57 +88,81 @@ const audio_out = union(
 
 const oled_hole = union(
   cube([30, 12, 3]),
-  cube([40, 12.5, 8]).translate([2, 0.5, -4])
+  cube([40, 12.5, 8]).translate([2, 0.25, -4])
 )
 
 const top = 
 difference(
   union(
     union(
-      keys.translate([0, -22, 0]),
-      keys.translate([0, 12, 0]),
+      
+      keys.translate([0, -22, -7]),
+      keys.translate([0, 12, -7]),
+      difference(
+        cube([keyPitch*8+4, keyPitch+4, 12]).translate([-keyPitch, -22, 14]),
+        cube([keyPitch*8, keyPitch, 14]).translate([-keyPitch, -22, 20]),
+        holes.translate([0, -22, -7]),
+
+      ),
+      difference(
+        cube([keyPitch*8+4, keyPitch+4, 12]).translate([-keyPitch, 12, 14]),
+        cube([keyPitch*8, keyPitch, 14]).translate([-keyPitch, 12, 20]),
+        holes.translate([0, 12, -7]),
+        oled_hole.translate([76, 25, 19]),
+      ),
       
     ).rotate([top_angle, 0, 0]),
 
-    screw_post.translate([keyPitch*5, 33, 0]),
-    screw_post.translate([-keyPitch*5, -37, 0]),
-    screw_post.translate([-keyPitch*5, 33, 0]),
-    screw_post.translate([keyPitch*5, -37, 0]),
-
+    screw_post.translate([keyPitch*5, 32.5, 0]),
+    screw_post.translate([-keyPitch*5, -36.5, 0]),
+    screw_post.translate([-keyPitch*5, 32.5, 0]),
+    screw_post.translate([keyPitch*5, -36.5, 0]),
+    
     difference(
   //knob.translate([77, -15, 22]),
 
       box,
       union(
-        holes.translate([0, -22, 0]),
-        holes.translate([0, 12, 0]),
-        leds.translate([0, -8, 0]),
-        leds.translate([0, 27, 0]),
+        cube([keyPitch*8, keyPitch, 14]).translate([-keyPitch, -22, 15]),
+        cube([keyPitch*8, keyPitch, 14]).translate([-keyPitch, 12, 15]),
+        leds.translate([0, -7, 0]),
+        leds.translate([0, 28, 0]),
         // rotary encoder hole
         cylinder(50, 3.6).translate([77, -15, 20]),
         cube([10, 40, 5]).translate([77, 25, 2]),
         //cylinder(50, 4).scale([1.5, 1, 1]).rotate([90, 0, 0]).translate([77, 15, 0]),
-        oled_hole.translate([75, 25, 19]),
+        oled_hole.translate([76, 25, 19]),
         
-        cube([13.5, 15.5, 20]).translate([77, -15, 6]),
+        cube([13.5, 15.5, 20]).translate([77, -15, 8]),
+        // cube([keyPitch*8, keyPitch, 20]).translate([0, 0, 20])
       ).rotate([top_angle, 0, 0])
     )
   ),
-cube([25, 16, 12]).translate([77, 29, 3]),
+  text.translate([77, 6, 19]).rotate([top_angle, 0, 0]),
+  // text2.translate([75.3, 4, 19]),
+  cube([25, 16, 12]).translate([77, 29, 3]),
   cube([keyPitch*20, 100, 60]).translate([0, 0, -30]),
           //3.5 mm outputs
         audio_out.translate([40, 32, 5]),
         audio_out.translate([20, 32, 5]),
         
         //Midi in / out
-        cylinder(50, 8).rotate([90, 0, 0]).translate([-17, 15, 5]),
-        cylinder(50, 8).rotate([90, 0, 0]).translate([-55, 15, 5]),
+        cylinder(20, 8).rotate([90, 0, 0]).translate([-17, 35, 5]),
+        cylinder(20, 8).rotate([90, 0, 0]).translate([-55, 35, 5]),
 
     screw_hole.translate([keyPitch*5, 33, 0]),
     screw_hole.translate([keyPitch*5, -37, 0]),
     screw_hole.translate([-keyPitch*5, 33, 0]),
     screw_hole.translate([-keyPitch*5, -37, 0]),
 
+//Clean up left edge
+difference(
+        cylinder(100, 50),
+        cylinder(101, 5),
+        cube([120, 120, 120]).translate([60, 0, 0]),
+        cube([120, 120, 120]).translate([0, -60, 0]),
+      )
+      .rotate([90+top_angle, 0, 0]).translate([-keyPitch*5, 0, 15]),
 )
 
 const hex_size = 14
@@ -158,9 +185,26 @@ for (i=0; i< number_x; i++) {
 
 const hex_grid = intersection(union(...cylinders).translate([-grid_x/2, -grid_y/2, 0]), cube([grid_x, grid_y, grid_thickness]));
 
+const size_x = keyPitch*10-12
+
+const hole_diam = 2
+const hole_spacing = 2
+
+const nx = Math.floor(size_x/(hole_diam + hole_spacing))
+btm_holes = []
+
+for (i=0; i < nx; i++) {
+  btm_holes.push(cylinder(20, hole_diam/2).rotate([90, 0, 0]).translate([i*(hole_diam + hole_spacing)-size_x/2 + hole_diam/2+3, -40, -4]))
+}
+
 const bottom =
   difference(
     union(
+      
+    cylinder(8, 5).translate([keyPitch*5, 32.5, -4]),
+    cylinder(8, 5).translate([keyPitch*5, -36.5, -4]),
+    cylinder(8, 5).translate([-keyPitch*5, 32.5, -4]),
+    cylinder(8, 5).translate([-keyPitch*5, -36.5, -4]),
     intersection(
       union(
         box,
@@ -171,7 +215,7 @@ const bottom =
     //screw posts
     ),
 
-    
+    ...btm_holes,
     hex_grid.translate([0, -2, -10]),
 
     //screw holes
@@ -200,6 +244,7 @@ const output = union(
   // cylinder(grid_thickness, hex_size/2).translate([2*(hex_size + hex_sep), 0, 0]),
   // bottom,
   top,
+  
 )
 
 const knurled_cylinder_module = `
