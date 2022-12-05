@@ -14,8 +14,24 @@ from adafruit_midi.timing_clock import TimingClock
 from adafruit_midi.program_change import ProgramChange
 from adafruit_midi.mtc_quarter_frame import MtcQuarterFrame
 from adafruit_midi.control_change import ControlChange
-
+import displayio
+import adafruit_displayio_ssd1306
+import adafruit_imageload
+import adafruit_mcp4725
+from adafruit_display_text import label
 import busio
+import terminalio
+
+notes = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+]
+
+def midi_note_name(midi_note):
+    n = midi_note - 24
+    octave = n // 12
+    note = notes[n%12]
+    return note+str(octave)
+    
 
 # 16 step sequencer
 
@@ -40,7 +56,8 @@ midi = adafruit_midi.MIDI(
 )
 
 uart = busio.UART(tx=board.GP16, rx=board.GP17, baudrate=31250, timeout=0.001)
-serial_midi = adafruit_midi.MIDI(midi_in=uart)
+
+serial_midi = adafruit_midi.MIDI(midi_in=uart, midi_out=uart)
 
 pixels = neopixel.NeoPixel(
     board.GP23, 1, brightness=1, auto_write=False
@@ -75,18 +92,122 @@ def save_data():
     try:
         with open("/params", "wb") as fp:
             fp.write(bytearray(data))
-        return 1
+            return 1
     except:
         print('Could not save data')
         return 0
         
 load_data()
-#rotary_button = Pin(2, Pin.IN, Pin.PULL_UP)
+
+# Gate signal
+gate_pin = digitalio.DigitalInOut(board.GP18)
+gate_pin.direction = digitalio.Direction.OUTPUT
+gate_pin.value = False
+
+def midi_to_cv(midi_note):
+    n = midi_note - 36
+    if (n > 60):
+        n = 60
+    if (n < 0):
+        n = 0
+    dc = pwms[n]
+    if dc > 65535:
+        dc = 65535
+    if dc < 0:
+        dc = 0
+    return dc
+    
+pwms = []
+note_pwm = 0
+ratio = 65535 / 5
+# This creates a pwm value for each note
+for pitch in range(61):
+    voltage = pitch / 12
+    pwm = voltage * ratio
+    pwms.append(int(pwm))
+
+
+displayio.release_displays()
+
+# Use for I2C
+i2c = busio.I2C(scl=board.GP21, sda=board.GP20, frequency=300000)
+
+
+dac = adafruit_mcp4725.MCP4725(i2c, address=0x60)
+
+display_bus = displayio.I2CDisplay(i2c, device_address=0x3C)
+WIDTH = 128
+HEIGHT = 32
+
+
+display = adafruit_displayio_ssd1306.SSD1306(display_bus, width=WIDTH, height=HEIGHT, rotation=180)
+
+
+sprite_sheet, palette = adafruit_imageload.load("spritesheet.bmp",
+bitmap=displayio.Bitmap, palette=displayio.Palette
+)
+
+sprite = displayio.TileGrid(sprite_sheet, pixel_shader=palette,
+                            width = 1,
+                            height = 1,
+                            tile_width = 11,
+                            tile_height = 11)
+
+# Create a Group to hold the sprite
+icon = displayio.Group(scale=1)
+
+# Add the sprite to the Group
+icon.append(sprite)
+
+# Add the Group to the Display
+
+
+# Set sprite location
+icon.x = 117
+icon.y = 0
+
+# Make the display context
+splash = displayio.Group()
+screen = displayio.Group()
+
+screen.append(splash)
+
+screen.append(icon)
+
+display.show(screen)
+
+# Draw the tempo
+tempo_text = label.Label(
+    terminalio.FONT, text=" " * 4, color=0xFFFFFF, x=0, y=6, scale=2
+)
+tempo_text.text = str(tempo)
+splash.append(tempo_text)
+
+legend = label.Label(
+    terminalio.FONT, text="Tempo", color=0xFFFFFF, x=0, y=25, scale=1
+)
+splash.append(legend)
+
+note_legend = label.Label(
+    terminalio.FONT, text="Note", color=0xFFFFFF, x=60, y=25, scale=1
+)
+splash.append(note_legend)
+
+#Draw the note
+note_text = label.Label(
+    terminalio.FONT, text=" " * 3, color=0xFFFFFF, x=60, y=6, scale=2
+)
+note_text.text = midi_note_name(sequence[0])
+
+splash.append(note_text)
+display.refresh()
+
+
 
 # multiplexed led pins
 # the rows will go LOW to turn the row on
 # lr = [board.GP0, board.GP1, board.GP4, board.GP3]
-lr = [board.GP3, board.GP4, board.GP1, board.GP0]
+lr = [board.GP1, board.GP0, board.GP3, board.GP2, ]
 led_row_pins = []
 for l in lr:
     led_pin = digitalio.DigitalInOut(l)
@@ -95,7 +216,7 @@ for l in lr:
     led_row_pins.append(led_pin)
     
 # lc = [board.GP5, board.GP6, board.GP7, board.GP8]
-lc = [board.GP8, board.GP7, board.GP6, board.GP5]
+lc = [board.GP7, board.GP6, board.GP5, board.GP4]
 led_col_pins = []
 for l in lc:
     led_pin = digitalio.DigitalInOut(l)
@@ -107,8 +228,8 @@ for l in lc:
 # keyboard matrix
 # the rows will go LOW to turn the row on
 keys = keypad.KeyMatrix(
-    row_pins=(board.GP12, board.GP11, board.GP10, board.GP9),
-    column_pins=(board.GP18, board.GP15, board.GP14, board.GP13),
+    row_pins=(board.GP9, board.GP8, board.GP11, board.GP10),
+    column_pins=(board.GP15, board.GP14, board.GP13, board.GP12,),
     columns_to_anodes=True,
 )
 
@@ -136,12 +257,12 @@ led_display_delay = 0.005
 last_step_display_time = 0
 last_pressed_key_display_time = 0
 
-rotary_button = keypad.Keys((board.GP2,), value_when_pressed=False, pull=True)
+rotary_button = keypad.Keys((board.GP22,), value_when_pressed=False, pull=True)
 rotary_pressed_time = 0
 rotary_release_time = 0
 rotary_pressed = False
 
-encoder = rotaryio.IncrementalEncoder(board.GP27, board.GP28)
+encoder = rotaryio.IncrementalEncoder(board.GP26, board.GP27)
 encoder.position = tempo//5
 
 last_save_data = 0
@@ -149,12 +270,29 @@ last_note_off_time = 30/tempo
 recording = False
 rotary_tapped_time = 0
 
-def play_note(midi_note):
+tt = tempo
+
+def note_on(midi_note):
     # plays a midi note from 32 to 96
-    if (midi_note < 0x7F):
+    if (midi_note < 0x7F and midi_note >= 0):
         message = NoteOn(midi_note)
         midi.send(message)
+        serial_midi.send(message)
         
+        gate_pin.value = True
+        try: 
+            dac.value = midi_to_cv(midi_note)
+        except Exception as e: 
+            pass
+            # print(e)
+        
+def note_off(midi_note):
+    # plays a midi note from 32 to 96
+    if (midi_note < 0x7F and midi_note >= 0):
+        message = NoteOff(midi_note)
+        midi.send(message)
+        serial_midi.send(message)
+        gate_pin.value = False
     
     
 def led_display(led):
@@ -180,52 +318,34 @@ def led_display(led):
     
 record_step = 0
 
+new_last_step = last_step
+set_last_step = False
+
 while True:
     t = time.monotonic()
     delta = t - last_note_play_time
     delta_off = t - last_note_off_time
     
-    if recording:
-        # TODO listen to midi message and set current note 
-        message = midi.receive()
-        #if last_recorded_step != play_step:
-        if (isinstance(message, NoteOn)):
-            sequence[record_step] = message.note
-            print('set step ', record_step, ' to ', message.note)
-            play_note(message.note)
-            time.sleep(0.1)
-            message = NoteOff(message.note)
-            midi.send(message)
-            record_step += 1
-            if (record_step > last_step):
-                record_step = first_step
-                #last_recorded_step = play_step
-            current_led = record_step
-        message = serial_midi.receive()
-        #if last_recorded_step != play_step:
-        if (isinstance(message, NoteOn)):
-            sequence[record_step] = message.note
-            print('set step ', record_step, ' to ', message.note)
-            play_note(message.note)
-            time.sleep(0.1)
-            message = NoteOff(message.note)
-            midi.send(message)
-            record_step += 1
-            if (record_step > last_step):
-                record_step = first_step
-                #last_recorded_step = play_step
-            current_led = record_step
+    if set_last_step and play_step == 0:
+        stride = 1 if last_step < new_last_step else -1
+        print("last_step, new_last_step, stride", last_step, new_last_step, stride)
+        for n in range(last_step, new_last_step, stride):
+            print(n)
+            note_off(sequence[n])
+            
+        last_step = new_last_step
+        set_last_step = False
                 
     if (playing and tempo > 0 and delta > 60/tempo):
         # send note on and increment current step
         last_note_play_time = t
         current_led = play_step
         if (active[play_step]):
-            play_note(sequence[play_step])
+            note_on(sequence[play_step])
         play_step += 1
         if (play_step > last_step):
             play_step = first_step
-    elif(playing and tempo > 0 and delta > 30/tempo and delta_off >= 60/tempo):
+    elif(playing and tempo > 0 and delta > 30/tempo and delta_off > 60/tempo):
         # send note off halfway to the next note
         last_note_off_time = t
         
@@ -234,14 +354,54 @@ while True:
             ps = last_step
             
         if (active[ps]):
-            message = NoteOff(sequence[ps])
-            midi.send(message)
+            note_off(sequence[ps])
+            
+
+            
+    if recording:
+        # Listen to USB midi message and set current note 
+        message = midi.receive()
+        #if last_recorded_step != play_step:
+        if (isinstance(message, NoteOn)):
+            sequence[record_step] = message.note
+            print('set step ', record_step, ' to ', message.note)
+            note_on(message.note)
+            note_text.text = midi_note_name(message.note)
+            time.sleep(0.1)
+            note_off(message.note)
+            record_step += 1
+            if (record_step > last_step):
+                record_step = first_step
+                #last_recorded_step = play_step
+            current_led = record_step
+            
+        # Listen to serial midi message and set current note 
+        message = serial_midi.receive()
+        #if last_recorded_step != play_step:
+        if (isinstance(message, NoteOn)):
+            sequence[record_step] = message.note
+            print('set step ', record_step, ' to ', message.note)
+            note_on(message.note)
+            note_text.text = midi_note_name(message.note)
+            time.sleep(0.1)
+            note_off(message.note)
+
+            record_step += 1
+            if (record_step > last_step):
+                record_step = first_step
+                #last_recorded_step = play_step
+            current_led = record_step
         
     event = rotary_button.events.get()
     # event will be None if nothing has happened.
     if event:
         if (event.pressed):
             rotary_pressed_time = t
+            rotary_pressed = True
+            # set encoder position to last step
+            
+            encoder.position = last_step
+            new_last_step = last_step
         else: 
             rotary_release_time = t
             last_save_data = 0
@@ -251,7 +411,10 @@ while True:
                 if (pressed_key):
                     encoder.position = sequence[pressed_key]
                 else:
+                    set_last_step = True
                     encoder.position = tempo // 5
+                    
+        
             
         if (rotary_pressed_time < rotary_release_time and rotary_release_time - rotary_pressed_time < 0.5):
             if (isinstance(pressed_key, int)):
@@ -264,17 +427,17 @@ while True:
                 playing = not playing
                 if (playing):
                     pixels.fill((0, 255, 0))
+                    sprite[0] = 1
                 else:
                     pixels.fill((255, 0, 0))
+                    sprite[0] = 0
                     # if pausing, send note off midi for current note
-                    message = NoteOff(sequence[current_led])
-                    midi.send(message)
-                
+                    note_off(sequence[current_led])
                 
                 # if rotary button was tapped a short time ago, set record mode
                 if (t - rotary_tapped_time < 0.5):
-                    message = NoteOff(sequence[current_led])
-                    midi.send(message)
+                    note_off(sequence[current_led])
+                    sprite[0] = 2
                     recording = True
                     playing = False
                     pixels.fill((255, 0, 255))
@@ -285,6 +448,8 @@ while True:
                     
                 pixels.show()
                 rotary_tapped_time = t
+
+
                 
                 
             
@@ -295,10 +460,12 @@ while True:
         if event.pressed:
             pressed_key = event.key_number
             encoder.position = sequence[pressed_key]
+            note_text.text = midi_note_name(sequence[pressed_key])
             if (recording):
                 record_step = pressed_key
                 current_led = record_step
         else:
+            note_text.text = " "
             pressed_key = False
             encoder.position = tempo // 5
     
@@ -317,12 +484,7 @@ while True:
             
         last_save_data = 1
         
-    if (rotary_pressed_time > rotary_release_time and t - rotary_pressed_time > 0.5 and rotary_pressed == False):
-        # rotary encoder is held down
-        rotary_pressed = True
-        # set encoder position to last step
-        
-        encoder.position = last_step
+
     
     if (encoder.position < 0):
         encoder.position = 0
@@ -331,26 +493,33 @@ while True:
         tempo = encoder.position * 5
         if (tempo <= 0):
             tempo = 1
-        if (tempo > 1000):
-            tempo = 1000
-    elif (isinstance(pressed_key, int) and rotary_pressed == False):
-        if not playing and sequence[pressed_key] != encoder.position:
-            play_note(encoder.position)
-            sequence[pressed_key] = encoder.position
+            encoder.position = tempo // 5
+        if (tempo > 3000):
+            tempo = 3000
+            encoder.position = tempo // 5
+            
+        
+    elif (isinstance(pressed_key, int) and rotary_pressed == False and sequence[pressed_key] != encoder.position):
+        if not playing:
+            note_on(encoder.position)
+            note_off(encoder.position)
+        else:
+            note_off(sequence[pressed_key])
+        sequence[pressed_key] = encoder.position
+        note_text.text = midi_note_name(encoder.position)
         
         
     elif (rotary_pressed == True):
         # turning while pressing : set last step
-        if last_step != encoder.position:
+        if new_last_step != encoder.position:
             # turn off last step in case it was on
-            if encoder.position < last_step:
-                message = NoteOff(sequence[last_step])
-                midi.send(message)
-            last_step = encoder.position
-            if (last_step > 15):
-                last_step = 0
-            if last_step < 0:
-                last_step = 0
+            if encoder.position < new_last_step:
+                note_off(sequence[new_last_step])
+            new_last_step = encoder.position
+            if (new_last_step > 15):
+                new_last_step = 15
+            if new_last_step < 0:
+                new_last_step = 0
             
     if (t - last_autosave_time > autosave_interval and not playing):
         #save_data()
@@ -369,6 +538,13 @@ while True:
         led_display(pressed_key)
         last_pressed_key_display_time = t
     # display step change LED
-    if (t - last_pressed_key_display_time > led_display_delay and rotary_pressed == True):
-        led_display(last_step)
+    if (t - last_pressed_key_display_time > led_display_delay and rotary_pressed == True and t - rotary_pressed_time > 0.2):
+        led_display(new_last_step)
         last_pressed_key_display_time = t
+        
+    time_spent = time.monotonic() - t
+        
+    if (time_spent < 1/tempo and tt != tempo):
+        tempo_text.text = str(tempo)
+        print("tempo", tempo, (time.monotonic() - t)*1000, 30000/tempo)
+        tt = tempo
